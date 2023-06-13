@@ -2,10 +2,10 @@
 
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useState } from 'react';
 
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import { manufacturers } from '@/constants';
 
@@ -19,29 +19,61 @@ const SearchButton = ({ otherClasses }: { otherClasses?: string }) => (
 
 const Searchbar = () => {
     const router = useRouter();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
 
     const [manufacturer, setManufacturer] = useState('');
     const [model, setModel] = useState('');
 
-    const updateSearchParams = (modelUpdate: string, manufacturerUpdate: string) => {
-        const searchParams = new URLSearchParams(window.location.search);
+    useEffect(() => {
+        const currentParams = searchParams.toString();
+        const params = new URLSearchParams(currentParams);
 
-        if (modelUpdate) {
-            searchParams.set('model', modelUpdate);
-        } else {
-            searchParams.delete('model');
+        setManufacturer(manufacturers.find((man) => man.toLowerCase() === params.get('manufacturer')) || '');
+        setModel(params.get('model') || '');
+    }, [searchParams]);
+
+    useEffect(() => {
+        // Retrieve scrollY value from localStorage after routing
+        const persistentScroll = localStorage.getItem('persistentScroll');
+        if (persistentScroll === null) return;
+
+        // Restore the window's scroll position
+        window.scrollTo({ top: Number(persistentScroll) });
+
+        // Remove scrollY from localStorage after restoring the scroll position
+        // This hook will run before and after routing happens so this check is
+        // here to make we don't delete scrollY before routing
+        if (Number(persistentScroll) === window.scrollY) {
+            localStorage.removeItem('persistentScroll');
         }
+    }, [searchParams]);
 
-        if (manufacturerUpdate) {
-            searchParams.set('manufacturer', manufacturerUpdate);
-        } else {
-            searchParams.delete('manufacturer');
-        }
+    const updateSearchParams = useCallback(
+        (modelUpdate: string, manufacturerUpdate: string) => {
+            const currentParams = searchParams.toString();
+            const params = new URLSearchParams(currentParams);
 
-        const newPathname = `${window.location.pathname}?${searchParams.toString()}`;
+            if (modelUpdate) {
+                params.set('model', modelUpdate);
+            } else {
+                params.delete('model');
+            }
 
-        router.push(newPathname);
-    };
+            if (manufacturerUpdate) {
+                params.set('manufacturer', manufacturerUpdate);
+            } else {
+                params.delete('manufacturer');
+            }
+
+            // Save current scrollY value to localStorage before pushing the new route
+            localStorage.setItem('persistentScroll', window.scrollY.toString());
+
+            // const newPathname = `${window.location.pathname}?${searchParams.toString()}`;
+            router.push(`${pathname}?${params.toString()}`);
+        },
+        [pathname, router, searchParams],
+    );
 
     const handleSearch = (e: FormEvent<HTMLFormElement>): void => {
         e.preventDefault();
@@ -52,13 +84,6 @@ const Searchbar = () => {
 
         updateSearchParams(model.toLowerCase(), manufacturer.toLowerCase());
     };
-
-    useEffect(() => {
-        const searchParams = new URLSearchParams(window.location.search);
-
-        setManufacturer(manufacturers.find((man) => man.toLowerCase() === searchParams.get('manufacturer')) || '');
-        setModel(searchParams.get('model') || '');
-    }, []);
 
     return (
         <form className='searchbar' onSubmit={handleSearch}>
